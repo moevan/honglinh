@@ -1,0 +1,3 @@
+if (self.CavalryLogger) { CavalryLogger.start_js(["CQbwu"]); }
+
+__d("DGWWebSocketTransport",[],(function(a,b,c,d,e,f){"use strict";f.getWebSocketConnection=a;function a(a){a=new WebSocket(a);a.binaryType="arraybuffer";return a}}),null);
