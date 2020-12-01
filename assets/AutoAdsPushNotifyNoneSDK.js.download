@@ -1,0 +1,294 @@
+﻿var _apn_environment = "production";
+var _apn = {
+	is_render_popup: false,
+	cookie_name: "__push_redisplaying_duration",
+	browser: {
+		// Opera 8.0+
+		isOpera: (!!window.opr && !!opr.addons) || !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0,
+		
+		// Firefox 1.0+
+		isFirefox: typeof InstallTrigger !== 'undefined',
+	
+		// Safari 3.0+ "[object HTMLElementConstructor]" 
+		isSafari: /constructor/i.test(window.HTMLElement) || (function (p) { return p.toString() === "[object SafariRemoteNotification]"; })(!window['safari'] || (typeof safari !== 'undefined' && safari.pushNotification)),
+	
+		// Internet Explorer 6-11
+		isIE: /*@cc_on!@*/false || !!document.documentMode,
+	
+		// Edge 20+
+		isEdge: !(false || !!document.documentMode) && !!window.StyleMedia,
+	
+		// Chrome 1 - 71
+		isChrome: !!window.chrome && (!!window.chrome.webstore || !!window.chrome.runtime)
+	},
+	sendDataToBrowser: function(msg) {
+		var state = "CLOSED";
+		switch (Notification.permission) {
+			case "granted":
+				state = "SUBSCRIBED";
+				break;
+			case "denied":
+				state = "DENIED";
+				break;
+			default:
+				state = "CLOSED";
+		}
+		
+		var data = {
+			state: state,
+			source: "subscribe",
+			postOrigin: "opener",
+			msg: msg
+		};
+	
+		if (window.opener) {
+			window.opener.postMessage(JSON.stringify(data), '*');
+			window.close();
+		}
+	},
+	conf: {
+		using_subdomain: function(){
+			switch(_apn_environment)
+			{
+				case 'alpha': 
+					return window.location.hostname.endsWith(".maxpush.io");
+				case 'beta': 
+					return window.location.hostname.endsWith(".maxpush.io");
+				case 'production': 
+					return window.location.hostname.endsWith(".maxpush.io");
+				default: 
+					return window.location.hostname==="localhost"
+			}
+		},
+		businessid: function(){
+			if (this.using_subdomain())
+			{
+				//get web id from url
+				var url = new URL(window.location.href); 
+				return url.searchParams.get("business_id");
+
+			} else {
+				if (typeof amlParseQueryString == 'function') {
+					return amlParseQueryString().business_id;
+				} else {
+					return '1AC4B094A9CF47CB89E830088D43516A';
+				}
+			}
+		},
+		domain_api: function(){
+			switch(_apn_environment)
+			{
+				case 'alpha': 
+					return 'https://alphaapi.autoads.asia/pushnotification';
+				case 'beta': 
+					return 'https://betaapi.autoads.asia/pushnotification';
+				case 'production': 
+					return 'https://api.autoads.asia/pushnotification';
+				default: 
+					return 'https://push.local';
+			}
+		},
+		confUrl: function(){
+			return this.domain_api() + '/api/v1/GetPushConf?business_id=' + this.businessid()
+		}
+	},
+	get_subcription: function (callback) {
+		var pushSubscriberStatus = apn_getCookie("PushSubscriberStatus");
+		var apn_endpoint = apn_getCookie("apn_endpoint");
+		if (pushSubscriberStatus && apn_endpoint) {
+			callback(apn_endpoint);
+			console.log('PushSubscriberStatus: ' + pushSubscriberStatus);
+		} else {
+			callback();
+		}
+	},
+	open_register_box: function () {
+		this.box_sub.open();
+	},
+	register_box_action: function (data) {
+		if (typeof amlJourneyMaxPushConfirm == 'function') {
+			amlJourneyMaxPushConfirm(data);
+		}
+	},
+	box_sub: {
+		open: function () {
+			let box_sub = document.getElementById('apn-popover-container')
+			if (box_sub) {
+				box_sub.style.display = '';
+				if (box_sub.classList.contains('apn-modal-close')) {
+					box_sub.classList.remove('apn-modal-close');
+				}
+				box_sub.classList.add('apn-modal-open');
+			} else {
+				console.log('box_sub not found')
+			}
+		},
+		close: function () {
+			let box_sub = document.getElementById('apn-popover-container')
+			if (box_sub) {
+				if (box_sub.classList.contains('apn-modal-open')) {
+					box_sub.classList.remove('apn-modal-open');
+				}
+				box_sub.classList.add('apn-modal-close');
+			} else {
+				console.log('box_sub not found')
+			}
+		}
+	}
+}
+
+apn_init();
+
+function apn_init(openRegisBoxNow) {
+	if(_apn.browser.isSafari || _apn.browser.isIE)
+	{
+		console.log("Autoads push: service worker is not supported!");
+		return;
+	}
+	
+	if (!window.Notification) {
+		console.log("Autoads push message: Notification not supported!");
+		return;
+	}
+		
+	var pushSubscriberStatus = apn_getCookie("PushSubscriberStatus");
+	if (pushSubscriberStatus) {
+        console.log('PushSubscriberStatus: ' + pushSubscriberStatus);
+    } else {
+		render_box_sub(function (conf) {
+			var cc_redisplaying_duration = apn_getCookie(_apn.cookie_name);
+			if (!cc_redisplaying_duration && conf.IsActive) {
+				_apn.box_sub.open();
+			}
+		});
+    }
+}
+
+function render_box_sub(callback) {
+	fetch(_apn.conf.confUrl()).then(response => response.json())
+		.then(conf => {
+
+			if (!_apn.is_render_popup && conf.IconUrl) {
+				_apn.is_render_popup = true;
+
+				var html = "<link type='text/css' rel='stylesheet' href='" + conf.CssLink + "'>";
+				html += "<div id='apn-popover-container' class='apn-popover-container apn-reset apn-modal-close' style='display:none'>";
+				html += "<div id='apn-popover-dialog' class='apn-popover-dialog' style='display:flex'>";
+				html += "<div id='apn-normal-popover' style='width:100%'>";
+				html += "<div class='apn-popover-body' style='display:flex'>";
+				html += "<div class='apn-popover-body-icon'>";
+				html += "<img alt='notification icon' src='" + conf.IconUrl + "'/></div>";
+				html += "<div class='apn-popover-body-message'>" + conf.Title + "</div><div class='clearfix'></div></div>";
+				html += "<div class='apn-popover-footer'>";
+				html += "<button id='apn-popover-allow-button' class='align-right apn-primary apn-popover-button'>" + conf.AgreeButtonText + "</button>";
+				html += "<button id='apn-popover-cancel-button' class='align-right apn-secondary apn-popover-button'>" + conf.IgnoreButtonText + "</button>";
+				html += "<div class='clearfix'></div>";
+				html += "</div></div></div></div>";
+
+				document.body.insertAdjacentHTML("beforeend", html);
+				apn_addClickEvent(conf);
+			}
+
+			callback(conf);
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+		});
+}
+
+function apn_addClickEvent(conf) {
+    document.getElementById("apn-popover-cancel-button").addEventListener("click", function () {
+        apn_setCookie(_apn.cookie_name, conf.RedisplayingDuration);
+		_apn.box_sub.close();
+		_apn.register_box_action({ ok: false });
+    });
+
+    document.getElementById("apn-popover-allow-button").addEventListener("click", function () {
+		_apn.box_sub.close();
+		//conf.Subdomain = "http://localhost:8000";// hard code for test
+		if (typeof window.open === 'function') {
+
+			let htmlFile = "";
+			switch (_apn_environment) {
+				case 'alpha':
+					htmlFile = "alpha.html";
+					break;
+				case 'beta':
+					htmlFile = "beta.html";
+					break;
+				case 'production':
+					htmlFile = "index.html";
+					break;
+				default:
+					htmlFile = "local.html";
+					break;
+			}
+
+			var referlink = "https://" + conf.Subdomain + '/' + htmlFile+'?business_id=' + _apn.conf.businessid();
+            window.open(referlink, "_blank", "width=800, height=600"); // open window. url cua he thong minh
+        }
+        else {
+            console.log('function window.open not found');
+        }
+    });
+}
+
+function apn_setCookie(cname, cvalue) {
+    var d = new Date();
+    d.setTime(d.getTime() + (cvalue * 60 * 1000));
+    var expires = "expires=" + d.toGMTString();
+    document.cookie = cname+"=" + cvalue + ";" + expires + ";path=/";
+}
+
+function apn_getCookie(cname) {
+    var name = cname + "=";
+    var decodedCookie = decodeURIComponent(document.cookie);
+    var ca = decodedCookie.split(';');
+    for (var i = 0; i < ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0) == ' ') {
+            c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+            return c.substring(name.length, c.length);
+        }
+    }
+    return null;
+}
+
+ window.addEventListener('message', function(event) {
+        var validOrigin = true;
+		
+		//bổ sung code đoạn này
+        /*apn_conf.allowedDomain.forEach(function(e) {
+            if (e.indexOf(event.origin) !== -1 || event.origin.indexOf(e) != -1) {
+                validOrigin = true;
+                return;
+            }
+        });*/
+		
+        if (validOrigin && typeof event.data === 'string' && event.data != '') {
+            var data = {};
+            if (event.data.indexOf('{') !== -1 && event.data.indexOf('}') !== -1) {
+                try {
+                    data = JSON.parse(event.data);
+                } catch (e) {}
+            }
+			
+			if (typeof data.state != "undefined") {
+				apn_setCookie("PushSubscriberStatus", data.state);
+				if (data.state !="SUBSCRIBED") {
+					_apn.register_box_action({ ok: false, endpoint: sub.endpoint });
+				}
+			}
+
+			if (typeof data.endpoint != "undefined") {
+				apn_setCookie("apn_endpoint", data.endpoint);
+				_apn.register_box_action({ ok: true });
+			}
+			
+            if (typeof data.msg != "undefined") {
+				console.log(data.msg);    
+            }
+        }
+    }, false);
